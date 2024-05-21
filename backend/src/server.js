@@ -32,6 +32,9 @@ function generateOTP() {
   // Generera en sexsiffrig numerisk OTP
   const otp = Math.floor(100000 + Math.random() * 900000);
   return otp.toString();
+  // Generera en sexsiffrig numerisk OTP
+  const otp = Math.floor(100000 + Math.random() * 900000);
+  return otp.toString();
 }
 
 //todo Din kod här. Skriv dina routes: ---------------------------------------
@@ -41,112 +44,118 @@ app.post('/users', async (req, res) => {
   // Hämta användarnamn och lösenord från förfrågans body
   const { username, password } = req.body;
 
-  // Skapa användare i user-tabellen
+  // Skapa användare i user-tabellen. Begränsning - just nu kan man inte spara unik användare. Inga dubletter
+  // Så innan man sparar användaren kolla att usermname itne redan existerar.
+
   try {
-    const userResult = await query('INSERT INTO users (username, password) VALUES (?, ?)', [
-      username,
-      password,
-    ]);
+    const userResult = await query(
+      "INSERT INTO users (username, password) VALUES (?, ?)",
+      [username, password]
+    );
 
-    const user_id = userResult.insertId;
+    const userId = userResult.insertId;
 
-    const accountResult = await query('INSERT INTO accounts (username, password) VALUES (?, ?)', [
-      userId,
-      0,
-    ]);
+    const accountResult = await query(
+      "INSERT INTO accounts (user_id, amount) VALUES (?, ?)",
+      [userId, 0]
+    );
 
-    const account_id = accountResult.insertId;
-    console.log(result);
+    const accountId = accountResult.insertId;
 
-    res.status(201).json({ message: 'user created', userId: user_id });
+    res
+      .status(201)
+      .json({
+        message: "User and account created",
+        userId: userId,
+        accountId: accountId,
+      });
   } catch (error) {
-    console.error('Error', error);
+    console.error("Error:", error);
+    res.status(500).send("Error creating user");
   }
-
-  // Skapa nytt konto. userId är relationen till den användare som precis skapats.
-  // Saldo är 0 från start.
-  const newAccount = {
-    id: accounts.length + 1,
-    userId: newUser.id,
-    balance: 0,
-  };
 });
 
 // Route för att logga in
-app.post('/sessions', async (req, res) => {
+app.post("/sessions", async (req, res) => {
   // Hämta användarnamn och lösenord från förfrågans body
   const { username, password } = req.body;
 
   try {
-    const result = await query('SELECT * FROM users WHERE username = ?', [username]);
-    // Check if a user with the provided username exists
-    if (result.length > 0) {
-      const user = result[0];
-      // Now you should compare the password with the hashed password stored in the database
-      // If password matches, you can create a session or token for the user
-      // For simplicity, let's assume you have a function comparePassword(password, hashedPassword)
-      // which compares the password with the hashed password and returns true if they match
-      if (await comparePassword(password, user.password)) {
-        // Passwords match, you can create a session or token here
-        // For example, you can set a session variable or generate a JWT token
-        // and send it back in the response
-        // res.send("Login successful");
-        // Or you can redirect the user to a dashboard page
-        // res.redirect("/dashboard");
-      } else {
-        // Passwords don't match, send an error response
-        res.status(401).send('Invalid username or password');
-      }
-    } else {
-      // No user found with the provided username
-      res.status(401).send('Invalid username or password');
+    const userResult = await query("SELECT * FROM users WHERE username = ?", [
+      username,
+    ]);
+
+    const user = userResult[0] // Obs! userResult returnerar en array, position 0 är första raden.
+
+    if(!user) {
+        return res.status(401).send("User not found");
+
     }
+
+    if (user.password === password) {
+
+      const token = generateOTP();
+
+      // Lägg till user_id och token i session-tabellen
+      const sessionResult = await query(
+        "INSERT INTO sessions (user_id, token) VALUES (?, ?)",
+        [user.id, token]
+      );
+      
+      const sessionId = sessionResult.insertId;
+
+      res.status(200).json({ message: "Login successful", token: token, sessionId: sessionId });
+
+    } else {
+      return res.status(401).send("Invalid password");
+    }
+
   } catch (error) {
-    // Handle any database or other errors
-    console.error('Error:', error);
-    res.status(500).send('Internal Server Error');
+    console.error("Error:", error);
+    return res.status(401).send("Error during login");
   }
+
+  // Hitta användaren i users-arrayen som matchar användarnamn och lösenord
+  // const user = users.find((user) => user.username === username && user.password === password);
+
+  // // Om användaren hittas
+  // if (user) {
+  //     // Generera en engångskod (OTP)
+  //     const otp = generateOTP();
+
+  //     // Skapa en ny session för användaren
+  //     const newSession = {
+  //         id: sessions.length + 1,
+  //         userId: user.id,
+  //         token: otp,
+  //     };
+
+  //     // Lägg till den nya sessionen i sessions-arrayen
+  //     sessions.push(newSession);
+
+  //     // Logga data
+  //     logCurrentData();
+
+  //     // Skicka en HTTP-status 201 (Created) och den nya sessionen som svar
+  //     res.status(201).json({newSession});
+  // } else {
+  //     // Logga data
+  //     logCurrentData();
+
+  //     // Skicka en HTTP-status 401 (Unauthorized) och ett felmeddelande som svar
+  //     res.status(401).json({ message: 'Invalid username or password' });
+  // }
 });
 
-// Hitta användaren i users-arrayen som matchar användarnamn och lösenord
-//   // Om användaren hittas
-//   if (user) {
-//     // Generera en engångskod (OTP)
-//     const otp = generateOTP();
-
-//     // Skapa en ny session för användaren
-//     const newSession = {
-//       id: sessions.length + 1,
-//       userId: user.id,
-//       token: otp,
-//     };
-
-//     // Lägg till den nya sessionen i sessions-arrayen
-//     sessions.push(newSession);
-
-//     // Logga data
-//     logCurrentData();
-
-//     // Skicka en HTTP-status 201 (Created) och den nya sessionen som svar
-//     res.status(201).json({ newSession });
-//   } else {
-//     // Logga data
-//     logCurrentData();
-
-//     // Skicka en HTTP-status 401 (Unauthorized) och ett felmeddelande som svar
-//     res.status(401).json({ message: 'Invalid username or password' });
-//   }
-// });
-
 // Route för att hämta användarens konton och visa saldo
-app.post('/me/account', (req, res) => {
+app.post("/me/account", (req, res) => {
   // Extrahera token från Authorization-headern. Exempel på header: "Bearer 12313"
-  const token = req.headers.authorization.split(' ')[1];
-  console.log('Received token:', token);
+  const token = req.headers.authorization.split(" ")[1];
+  console.log("Received token:", token);
 
   // Hitta sessionen i sessions-arrayen som matchar token
   const session = sessions.find((session) => session.token === token);
-  console.log('Found session:', session);
+  console.log("Found session:", session);
 
   // Om sessionen hittas, extrahera userId från sessionen
   if (session) {
@@ -159,18 +168,18 @@ app.post('/me/account', (req, res) => {
       res.json({ balance: account.balance });
     } else {
       // Om kontot inte hittas, skicka tillbaka status 404 och ett felmeddelande
-      res.status(404).json({ error: 'Account not found' });
+      res.status(404).json({ error: "Account not found" });
     }
   } else {
     // Om sessionen inte hittas, skicka tillbaka status 401 och ett felmeddelande
-    res.status(401).json({ error: 'Invalid session token' });
+    res.status(401).json({ error: "Invalid session token" });
   }
 });
 
-app.post('/me/account/transaction', (req, res) => {
+app.post("/me/account/transaction", (req, res) => {
   // Extrahera token från Authorization-headern
-  const token = req.headers.authorization.split(' ')[1]; // Extract token from Authorization header
-  console.log('Received token:', token);
+  const token = req.headers.authorization.split(" ")[1]; // Extract token from Authorization header
+  console.log("Received token:", token);
 
   // Hitta sessionen i sessions-arrayen som matchar token
   const session = sessions.find((session) => session.token === token);
@@ -178,7 +187,9 @@ app.post('/me/account/transaction', (req, res) => {
   // Om sessionen hittas
   if (session) {
     // Hitta kontot i accounts-arrayen som matchar userId från sessionen
-    const account = accounts.find((account) => account.userId === session.userId);
+    const account = accounts.find(
+      (account) => account.userId === session.userId
+    );
     // Om kontot hittas
     if (account) {
       // Extrahera beloppet från förfrågans body
@@ -194,11 +205,11 @@ app.post('/me/account/transaction', (req, res) => {
       res.status(201).json({ message: account.balance });
     } else {
       // Om kontot inte hittas, skicka tillbaka en 404-status och ett felmeddelande
-      res.status(404).json({ message: 'Account not found' });
+      res.status(404).json({ message: "Account not found" });
     }
   } else {
     // Om sessionen inte hittas, skicka tillbaka en 401-status och ett felmeddelande
-    res.status(401).json({ message: 'Invalid Token' });
+    res.status(401).json({ message: "Invalid Token" });
   }
 });
 
