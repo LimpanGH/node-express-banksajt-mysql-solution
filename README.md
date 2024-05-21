@@ -1,2 +1,0 @@
-# node-express-banksajt-solution
-
